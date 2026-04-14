@@ -1,5 +1,3 @@
-# Copyright (C) 2024 psionicprjkt
-
 name: ci-macOS
 
 on:
@@ -10,11 +8,11 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Set up SSH
-        uses: fastai/workflows/ssh@master
-        with:
-          ssh_key: ${{ secrets.SSH_KEY }}
-          key_file: id_ecdsa
-
+      # The tmate action handles the SSH setup automatically.
+      # Using a specific version tag is crucial for stability.
       - name: Setup Debug Session
-        uses: mxschmitt/action-tmate@master
+        uses: mxschmitt/action-tmate@v3
+        # The `limit-access-to-actor` is a useful security feature to ensure
+        # only the user who triggered the workflow can connect.
+        with:
+          limit-access-to-actor: true
