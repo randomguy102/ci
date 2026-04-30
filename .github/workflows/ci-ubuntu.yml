@@ -1,20 +1,28 @@
-# Copyright (C) 2024 psionicprjkt
-
+# Copyright (C) 2026 ELOHIM
 name: ci-ubuntu
 
 on:
   workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Enable SSH debug session via tmate'
+        required: false
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-      - name: Set up SSH
-        uses: fastai/workflows/ssh@master
-        with:
-          ssh_key: ${{ secrets.SSH_KEY }}
-          key_file: id_ecdsa
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Debug Session
-        uses: mxschmitt/action-tmate@master
+      - name: Setup tmate SSH session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        timeout-minutes: 30
+        with:
+          detached: true
+          limit-access-to-actor: true
