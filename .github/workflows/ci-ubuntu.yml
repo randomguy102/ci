@@ -1,6 +1,5 @@
 # Copyright (C) 2026 ELOHIM
 name: ci-ubuntu
-
 on:
   workflow_dispatch:
     inputs:
@@ -9,15 +8,27 @@ on:
         description: 'Enable SSH debug session via tmate'
         required: false
         default: false
-
+      ssh_password:
+        type: string
+        description: 'Password to authorize SSH debug access'
+        required: false
+        default: ''
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate SSH password
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        run: |
+          if [ "${{ inputs.ssh_password }}" != "${{ secrets.SSH_DEBUG_PASSWORD }}" ]; then
+            echo "Invalid SSH debug password. Access denied."
+            exit 1
+          fi
+          echo "Password accepted. Starting SSH session..."
 
       - name: Setup tmate SSH session
         uses: mxschmitt/action-tmate@v3
