@@ -1,18 +1,14 @@
-# Copyright (C) 2026 ELOHIM
+# Copyright (C) 2026 sudo
 name: ci-ubuntu
 on:
   workflow_dispatch:
     inputs:
       debug_enabled:
         type: boolean
-        description: 'Enable SSH debug session via tmate'
+        description: 'Enable SSH debug session'
         required: false
         default: false
-      ssh_password:
-        type: string
-        description: 'Password to authorize SSH debug access'
-        required: false
-        default: ''
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,15 +16,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate SSH password
+      - name: Setup SSH + tmux debug session
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        env:
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
         run: |
-          if [ "${{ inputs.ssh_password }}" != "${{ secrets.SSH_DEBUG_PASSWORD }}" ]; then
-            echo "Invalid SSH debug password. Access denied."
-            exit 1
-          fi
-          echo "Password accepted. Starting SSH session..."
+          # Install dependencies
+          sudo apt-get install -y tmux openssh-server curl
 
-      - name: Setup tmate SSH session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+          # Authorize your SSH key
+          mkdir -p ~/.ssh
+          echo "$SSH_PUBLIC_KEY" >> ~/.ssh/authorized_keys
+          chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+
+          # Start SSH daemon
+          sudo service ssh start
+
+          # Expose port via ngrok (or bore/localhost.run — see notes)
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+          chmod +x /usr/local/bin/cloudflared
+          cloudflared tunnel --url ssh://localhost:22 &>/tmp/cloudflared.log &
+
+          # Wait for tunnel URL
+          sleep 5
+          TUNNEL_URL=$(grep -o 'https://[^ ]*\.trycloudflare\.com' /tmp/cloudflared.log | head -1)
+          echo "::notice ::SSH via cloudflare: ssh -o ProxyCommand='cloudflared access ssh --hostname %h' runner@${TUNNEL_URL#https://}"
+
+          # Start a persistent named tmux session
+          tmux new-session -d -s debug
+
+          # Keep alive while tmux session exists
+          while tmux has-session -t debug 2>/dev/null; do
+            sleep 10
+          done
+          echo "tmux session ended, continuing workflow..."
